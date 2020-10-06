@@ -217,7 +217,7 @@ func getFromURL(url string) (string, int, error) {
 }
 
 func getFromURLTimeoutSize(url string, timeout int, sizeOnly bool) (string, int, error) {
-	fmt.Printf("* getFromURL(): %s\n", url)
+	// fmt.Printf("* getFromURL(): %s\n", url)
 
 	t := time.Duration(time.Duration(timeout) * time.Second)
 	client := http.Client{
@@ -243,7 +243,7 @@ func getFromURLTimeoutSize(url string, timeout int, sizeOnly bool) (string, int,
 	len := resp.Header.Get("Content-Length")
 	sz, err := strconv.Atoi(len)
 	if err != nil {
-		fmt.Printf("WARNING: could not covert 'Content-Length' %q to integer\n", len)
+		// fmt.Printf("WARNING: could not covert 'Content-Length' %q to integer\n", len)
 		sz = 0
 	}
 	// only the Content-Length is requested; do not download the whole file.
@@ -668,55 +668,85 @@ func filterVersions(versions VersionList) (VersionList, error) {
 }
 
 func main() {
-	printLineSeparator('#')
-	fmt.Println(messageStart)
-	fmt.Println("** kubeadm manifest list verification tests **")
-	fmt.Printf("\nrequired architectures:\n%s\n\n", strings.Join(archList, ", "))
+	registry := os.Args[1]
+	tagImages(registry)
+	// printLineSeparator('#')
+	// fmt.Println(messageStart)
+	// fmt.Println("** kubeadm manifest list verification tests **")
+	// fmt.Printf("\nrequired architectures:\n%s\n\n", strings.Join(archList, ", "))
 
+	// // download tags from github.
+	// versions, err := getReleaseVersions()
+	// if err != nil {
+	// 	exitWithError(err)
+	// }
+
+	// // print downloaded versions.
+	// fmt.Println("* downloaded the following releases from GitHub:")
+	// versions.print()
+
+	// // filter the versions.
+	// filteredVersions, err := filterVersions(versions)
+	// if err != nil {
+	// 	exitWithError(err)
+	// }
+	// fmt.Println("* testing the following list of releases that should support manifest lists:")
+	// filteredVersions.print()
+
+	// // process versions.
+	// versionsWithErrors := []string{}
+	// for _, v := range filteredVersions {
+	// 	fmt.Println()
+	// 	printLineSeparator('#')
+	// 	fmt.Printf("verify k8s %s\n", v.String())
+	// 	printLineSeparator('#')
+	// 	fmt.Println()
+
+	// 	missingImages, err := verifyKubernetesVersion(v)
+	// 	if err != nil {
+	// 		fmt.Printf("\n* ERROR: could not process version %q: %s\n", v.String(), err)
+	// 		continue
+	// 	}
+	// 	if len(missingImages) > 0 {
+	// 		fmt.Printf("\n* ERROR: the following images have manifest lists errors for version %q: %s\n", v.String(), strings.Join(missingImages, ", "))
+	// 		versionsWithErrors = append(versionsWithErrors, v.String())
+	// 	} else {
+	// 		fmt.Printf("\n* PASSED: all image checks passed for: %s\n", v.String())
+	// 	}
+	// }
+
+	// // print outcome.
+	// if len(versionsWithErrors) > 0 {
+	// 	exitWithError(fmt.Errorf("the following k8s versions have manifest lists errors: %s", strings.Join(versionsWithErrors, ", ")))
+	// } else {
+	// 	fmt.Println(messageSuccess)
+	// }
+}
+
+func tagImages(registry string) {
 	// download tags from github.
 	versions, err := getReleaseVersions()
 	if err != nil {
 		exitWithError(err)
 	}
 
-	// print downloaded versions.
-	fmt.Println("* downloaded the following releases from GitHub:")
-	versions.print()
-
-	// filter the versions.
-	filteredVersions, err := filterVersions(versions)
-	if err != nil {
-		exitWithError(err)
-	}
-	fmt.Println("* testing the following list of releases that should support manifest lists:")
-	filteredVersions.print()
-
-	// process versions.
-	versionsWithErrors := []string{}
-	for _, v := range filteredVersions {
-		fmt.Println()
-		printLineSeparator('#')
-		fmt.Printf("verify k8s %s\n", v.String())
-		printLineSeparator('#')
-		fmt.Println()
-
-		missingImages, err := verifyKubernetesVersion(v)
-		if err != nil {
-			fmt.Printf("\n* ERROR: could not process version %q: %s\n", v.String(), err)
+	for _, v := range versions {
+		if v.PreRelease() != "" {
 			continue
 		}
-		if len(missingImages) > 0 {
-			fmt.Printf("\n* ERROR: the following images have manifest lists errors for version %q: %s\n", v.String(), strings.Join(missingImages, ", "))
-			versionsWithErrors = append(versionsWithErrors, v.String())
-		} else {
-			fmt.Printf("\n* PASSED: all image checks passed for: %s\n", v.String())
-		}
-	}
+		fmt.Printf("#------%s------#\n", v)
+		images := make(map[string]string)
+		if err := getImageVersions(v, images); err == nil {
+			for image, version := range images {
+				gcr_image := fmt.Sprintf("docker pull k8s.gcr.io/%s:%s\n", image, version)
+				fmt.Print(gcr_image)
 
-	// print outcome.
-	if len(versionsWithErrors) > 0 {
-		exitWithError(fmt.Errorf("the following k8s versions have manifest lists errors: %s", strings.Join(versionsWithErrors, ", ")))
-	} else {
-		fmt.Println(messageSuccess)
+				banzai_image := fmt.Sprintf("docker tag k8s.gcr.io/%s:%s %s/%s:%s\n", registry, image, version, image, version)
+				fmt.Print(banzai_image)
+
+				push_banzai_image := fmt.Sprintf("docker push %s/%s:%s\n", registry, image, version)
+				fmt.Print(push_banzai_image)
+			}
+		}
 	}
 }
