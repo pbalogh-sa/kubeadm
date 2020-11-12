@@ -741,7 +741,7 @@ func tagImages(registry string) {
 				gcr_image := fmt.Sprintf("docker pull k8s.gcr.io/%s:%s\n", image, version)
 				fmt.Print(gcr_image)
 
-				private_image := fmt.Sprintf("docker tag k8s.gcr.io/%s:%s %s/%s:%s\n", registry, image, version, image, version)
+				private_image := fmt.Sprintf("docker tag k8s.gcr.io/%s:%s %s/%s:%s\n", image, version, registry, image, version)
 				fmt.Print(private_image)
 
 				push_private_image := fmt.Sprintf("docker push %s/%s:%s\n", registry, image, version)
